@@ -3,9 +3,10 @@
 Matrix multiplication benchmarking tool.  The program can be built with various matrix multiplication kernels:
 
 - Baseline Fortran, no compiler optimization
-- Baseline Fortran, with compiler optimizations
-- OpenMP-parallelization, no compiler optimizations
-- OpenMP-parallelization, with compiler optimizations
+- Smart Fortran (eliminates FP ops for alpha/beta of 0.0/1.0), no compiler optimization
+- Smart Fortran, with compiler optimizations
+- OpenMP-parallelization of smart Fortran, no compiler optimizations
+- OpenMP-parallelization of smart Fortran, with compiler optimizations
 - BLAS (sgemm/dgemm)
 
 In this case *compiler optimizations* include loop unrolling, inlining, and host/processor-specific tuning and scheduling.
@@ -47,10 +48,10 @@ $ make
 ## Execution
 
 ```
-$ ./mm.x --help
+$ ./mmbench --help
 usage:
 
-  ./mm.x [options]
+  ./mmbench [options]
 
  options:
 
@@ -69,9 +70,9 @@ usage:
       <init-method> = (noop|simple|random|file=<path>)
 
   -r/--routines <routine-spec>         augment the list of routines to perform
-                                       (default: basic,opt)
+                                       (default: basic,smart,opt)
 
-      <routine-spec> = {+|-}(all|basic|opt|openmp|openmp_opt|blas){,...}
+      <routine-spec> = {+|-}(all|basic|smart|opt|openmp|openmp_opt|blas){,...}
 
 
  calculation performed is:
@@ -84,44 +85,54 @@ usage:
   -n/--dimension <integer>             dimension of the matrices (default: 1000)
   -a/--alpha <real>                    alpha value in equation (default: 1)
   -b/--beta <real>                     beta value in equation (default: 0)
-
 ```
 
-The simplest test is to just execute `./mm.x` without any flags:
+The simplest test is to just execute `./mmbench` without any flags:
 
 ```
-$ ./mm.x
+$ ./mmbench
 INFO:  Using matrix initialization method 'noop'
-INFO:  Using matrix multiplication routines 'basic,opt'
+INFO:  Using matrix multiplication routines 'basic,smart,opt'
 INFO:  Allocating matrices with alignment of 8 bytes
                                                                           walltime  |        user cpu  |      system cpu 
-INIT:     Noop matrix initialization:                               8.024300000e-05 |  4.310000000e-04 |  8.840000000e-04
-START:    Baseline n x n matrix multiply:                           5.141303350e+00 |  6.287292000e+00 |  3.084725000e+00
-INIT:     Noop matrix initialization:                               2.963000000e-06 |  1.000000000e-06 |  1.000000000e-06
-START:    Baseline n x n matrix multiply:                           4.883241605e+00 |  4.882736000e+00 |  0.000000000e+00
-INIT:     Noop matrix initialization:                               2.884000000e-06 |  2.000000000e-06 |  0.000000000e+00
-START:    Baseline n x n matrix multiply:                           4.888432435e+00 |  4.887408000e+00 |  5.200000000e-04
-INIT:     Noop matrix initialization:                               2.912000000e-06 |  2.000000000e-06 |  1.000000000e-06
-START:    Baseline n x n matrix multiply:                           4.882876768e+00 |  4.882377000e+00 |  0.000000000e+00
-AVG INIT:                                                           2.225050000e-05 |  1.090000000e-04 |  2.215000000e-04
-AVG MULT:                                                           4.948963540e+00 |  5.234953250e+00 |  7.713112500e-01
+INIT:     Noop matrix initialization:                               9.427000000e-06 |  1.000000000e-06 |  1.000000000e-06
+START:    Baseline n x n matrix multiply:                           8.529748004e+00 |  8.523862000e+00 |  2.259000000e-03
+INIT:     Noop matrix initialization:                               1.232000000e-06 |  0.000000000e+00 |  0.000000000e+00
+START:    Baseline n x n matrix multiply:                           7.823453647e+00 |  7.822634000e+00 |  0.000000000e+00
+INIT:     Noop matrix initialization:                               1.183000000e-06 |  0.000000000e+00 |  0.000000000e+00
+START:    Baseline n x n matrix multiply:                           7.737498924e+00 |  7.734720000e+00 |  9.990000000e-04
+INIT:     Noop matrix initialization:                               1.152000000e-06 |  1.000000000e-06 |  0.000000000e+00
+START:    Baseline n x n matrix multiply:                           7.264827706e+00 |  7.264055000e+00 |  0.000000000e+00
+AVG INIT:                                                           3.248500000e-06 |  5.000000000e-07 |  2.500000000e-07
+AVG MULT:                                                           7.838882070e+00 |  7.836317750e+00 |  8.145000000e-04
 
-INIT:     Noop matrix initialization:                               2.961000000e-06 |  2.000000000e-06 |  0.000000000e+00
-START:    Baseline (optimized) n x n matrix multiply:               9.125678750e-01 |  9.124730000e-01 |  0.000000000e+00
-INIT:     Noop matrix initialization:                               2.826000000e-06 |  2.000000000e-06 |  0.000000000e+00
-START:    Baseline (optimized) n x n matrix multiply:               9.129683200e-01 |  9.128680000e-01 |  0.000000000e+00
-INIT:     Noop matrix initialization:                               2.844000000e-06 |  2.000000000e-06 |  0.000000000e+00
-START:    Baseline (optimized) n x n matrix multiply:               9.126583860e-01 |  9.125630000e-01 |  0.000000000e+00
-INIT:     Noop matrix initialization:                               2.823000000e-06 |  2.000000000e-06 |  0.000000000e+00
-START:    Baseline (optimized) n x n matrix multiply:               9.122169010e-01 |  9.121220000e-01 |  0.000000000e+00
-AVG INIT:                                                           2.863500000e-06 |  2.000000000e-06 |  0.000000000e+00
-AVG MULT:                                                           9.126028705e-01 |  9.125065000e-01 |  0.000000000e+00
+INIT:     Noop matrix initialization:                               4.934000000e-06 |  0.000000000e+00 |  3.000000000e-06
+START:    Smart n x n matrix multiply:                              7.542515391e+00 |  7.524331000e+00 |  1.573000000e-02
+INIT:     Noop matrix initialization:                               1.168000000e-06 |  0.000000000e+00 |  0.000000000e+00
+START:    Smart n x n matrix multiply:                              7.523280223e+00 |  7.522312000e+00 |  0.000000000e+00
+INIT:     Noop matrix initialization:                               1.237000000e-06 |  0.000000000e+00 |  0.000000000e+00
+START:    Smart n x n matrix multiply:                              7.340598395e+00 |  7.338839000e+00 |  1.000000000e-03
+INIT:     Noop matrix initialization:                               1.256000000e-06 |  0.000000000e+00 |  0.000000000e+00
+START:    Smart n x n matrix multiply:                              7.380978254e+00 |  7.377189000e+00 |  3.000000000e-03
+AVG INIT:                                                           2.148750000e-06 |  0.000000000e+00 |  7.500000000e-07
+AVG MULT:                                                           7.446843066e+00 |  7.440667750e+00 |  4.932500000e-03
+
+INIT:     Noop matrix initialization:                               1.112000000e-06 |  0.000000000e+00 |  0.000000000e+00
+START:    Baseline (optimized) n x n matrix multiply:               8.457228800e-02 |  8.357300000e-02 |  9.900000000e-04
+INIT:     Noop matrix initialization:                               1.570200000e-05 |  1.500000000e-05 |  0.000000000e+00
+START:    Baseline (optimized) n x n matrix multiply:               8.636932100e-02 |  8.635400000e-02 |  0.000000000e+00
+INIT:     Noop matrix initialization:                               1.835000000e-05 |  0.000000000e+00 |  1.800000000e-05
+START:    Baseline (optimized) n x n matrix multiply:               8.644464300e-02 |  8.545900000e-02 |  9.760000000e-04
+INIT:     Noop matrix initialization:                               1.049000000e-06 |  1.000000000e-06 |  0.000000000e+00
+START:    Baseline (optimized) n x n matrix multiply:               9.097923600e-02 |  9.096900000e-02 |  0.000000000e+00
+AVG INIT:                                                           9.053250000e-06 |  4.000000000e-06 |  4.500000000e-06
+AVG MULT:                                                           8.709137200e-02 |  8.658875000e-02 |  4.915000000e-04                                                        9.126028705e-01 |  9.125065000e-01 |  0.000000000e+00
 ```
 
 To explicitly only test the BLAS variant (which in this example is linked against the Portland default BLAS):
 
 ```
-$ ./mm.x --routines==blas
+$ ./mmbench --routines==blas
 INFO:  Using matrix initialization method 'noop'
 INFO:  Using matrix multiplication routines 'blas'
 INFO:  Allocating matrices with alignment of 8 bytes
@@ -141,7 +152,8 @@ AVG MULT:                                                           4.098878300e
 Or to exercise a direct i/o file-based matrix initialization (with smaller matrix dimension):
 
 ```
-$ ./mm.x --init=file=mat --routines==opt -n100 --direct-io
+$ dd if=/dev/urandom of=mat bs=8000 count=1000
+$ ./mmbench --init=file=mat --routines==opt -n100 --direct-io
 INFO:  Using matrix initialization method 'file=mat'
 INFO:  Using matrix multiplication routines 'opt'
 INFO:  Allocating matrices with alignment of 8 bytes
