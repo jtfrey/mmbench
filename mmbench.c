@@ -1,5 +1,5 @@
 /*
- * mm.c
+ * mmbench.c
  *
  * C driver for the Fortran-based matrix multiplication subroutines.  Performs all
  * memory allocations, matrix initializations, and timing operations.
@@ -70,7 +70,8 @@
 //
 // The Fortran subroutines:
 //
-void mat_mult_baseline_(f_integer*, f_real*, f_real*, f_real*, f_real*, f_real*, f_integer, f_integer, f_integer, f_integer, f_integer, f_integer);
+void mat_mult_basic_(f_integer*, f_real*, f_real*, f_real*, f_real*, f_real*, f_integer, f_integer, f_integer, f_integer, f_integer, f_integer);
+void mat_mult_smart_(f_integer*, f_real*, f_real*, f_real*, f_real*, f_real*, f_integer, f_integer, f_integer, f_integer, f_integer, f_integer);
 void mat_mult_optimized_(f_integer*, f_real*, f_real*, f_real*, f_real*, f_real*, f_integer, f_integer, f_integer, f_integer, f_integer, f_integer);
 void mat_mult_openmp_(f_integer*, f_real*, f_real*, f_real*, f_real*, f_real*, f_integer, f_integer, f_integer, f_integer, f_integer, f_integer);
 void mat_mult_openmp_optimized_(f_integer*, f_real*, f_real*, f_real*, f_real*, f_real*, f_integer, f_integer, f_integer, f_integer, f_integer, f_integer);
@@ -84,23 +85,25 @@ void mat_mult_blas_(f_integer*, f_real*, f_real*, f_real*, f_real*, f_real*, f_i
 //
 typedef enum {
     kMultiplyRoutineBasic       = 1 << 0,
-    kMultiplyRoutineOpt         = 1 << 1,
-    kMultiplyRoutineOpenMPOpt   = 1 << 2,
-    kMultiplyRoutineOpenMP      = 1 << 3,
-    kMultiplyRoutineBLAS        = 1 << 4,
+    kMultiplyRoutineSmart       = 1 << 1,
+    kMultiplyRoutineOpt         = 1 << 2,
+    kMultiplyRoutineOpenMPOpt   = 1 << 3,
+    kMultiplyRoutineOpenMP      = 1 << 4,
+    kMultiplyRoutineBLAS        = 1 << 5,
 
     kMultiplyRoutineMin         = kMultiplyRoutineBasic,
     kMultiplyRoutineMax         = kMultiplyRoutineBLAS,
 
     kMultiplyRoutineNone        = 0,
 
-    kMultiplyRoutineAll         = kMultiplyRoutineBasic | kMultiplyRoutineOpt | kMultiplyRoutineOpenMP | kMultiplyRoutineOpenMPOpt | kMultiplyRoutineBLAS,
+    kMultiplyRoutineAll         = kMultiplyRoutineBasic | kMultiplyRoutineSmart | kMultiplyRoutineOpt | kMultiplyRoutineOpenMP | kMultiplyRoutineOpenMPOpt | kMultiplyRoutineBLAS,
 
-    kMultiplyRoutineDefault     = kMultiplyRoutineBasic | kMultiplyRoutineOpt
+    kMultiplyRoutineDefault     = kMultiplyRoutineBasic | kMultiplyRoutineSmart | kMultiplyRoutineOpt
 } MultiplyRoutine_t;
 
 const char* MultiplyRoutine_strs[] = {
                             "basic",
+                            "smart",
                             "opt",
                             "openmp_opt",
                             "openmp",
@@ -380,7 +383,7 @@ usage(
         "      <init-method> = (noop|simple|random|file=<path>)\n\n"
         "  -r/--routines <routine-spec>         augment the list of routines to perform\n"
         "                                       (default: %s)\n\n"
-        "      <routine-spec> = {+|-}(all|basic|opt|openmp|openmp_opt|blas){,...}\n\n"
+        "      <routine-spec> = {+|-}(all|basic|smart|opt|openmp|openmp_opt|blas){,...}\n\n"
         "\n"
         " calculation performed is:\n\n"
         "      C = alpha * A . B + beta * C\n"
@@ -805,7 +808,15 @@ main(
                     case kMultiplyRoutineBasic: {
                         printf("START:    Baseline n x n matrix multiply:                          "); fflush(stdout);
                         TIMING_START();
-                        mat_mult_baseline_(&n, &alpha, A, B, &beta, C, n, n, n, n, n, n);
+                        mat_mult_basic_(&n, &alpha, A, B, &beta, C, n, n, n, n, n, n);
+                        TIMING_END(T);
+                        break;
+                    }
+                    
+                    case kMultiplyRoutineSmart: {
+                        printf("START:    Smart n x n matrix multiply:                             "); fflush(stdout);
+                        TIMING_START();
+                        mat_mult_smart_(&n, &alpha, A, B, &beta, C, n, n, n, n, n, n);
                         TIMING_END(T);
                         break;
                     }

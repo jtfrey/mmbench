@@ -1,4 +1,4 @@
-      subroutine mat_mult_baseline(n, alpha, A, B, beta, C)
+      subroutine mat_mult_basic(n, alpha, A, B, beta, C)
 !DIR$ NOOPTIMIZE
 !$PRAGMA SUN OPT=0
 
@@ -11,8 +11,9 @@
       integer               :: i, j, k
       real                  :: prodsum
 
-      do i=1,n
-          do j=1,n
+
+      do j=1,n
+          do i=1,n
               prodsum = 0.0
               do k=1,n
                   prodsum = prodsum + alpha * A(i,k) * B(k,j)

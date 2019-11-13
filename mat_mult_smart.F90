@@ -1,4 +1,6 @@
-      subroutine mat_mult_optimized(n, alpha, A, B, beta, C)
+      subroutine mat_mult_smart(n, alpha, A, B, beta, C)
+!DIR$ NOOPTIMIZE
+!$PRAGMA SUN OPT=0
 
       implicit none
 
