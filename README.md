@@ -11,6 +11,14 @@ Matrix multiplication benchmarking tool.  The program can be built with various 
 
 In this case *compiler optimizations* include loop unrolling, inlining, and host/processor-specific tuning and scheduling.
 
+There are also multiple matrix initialization methods available:
+
+- None
+- Zero (memset())
+- Simple formula
+- Random values
+- Binary read from file (options for direct, sync, noatime)
+
 ## Building
 
 The CMake build system can be used to configure the build of the program.  From the cloned source directory:
@@ -30,6 +38,7 @@ There are several options that control the features available in the program:
 | Option | Default | Description |
 | --- | --- | --- |
 | `HAVE_FORTRAN_REAL8` | Off | Use 64-bit (double-precision) reals in the Fortran subroutines |
+| `HAVE_FORTRAN_LOGICAL8` | Off | Use 64-bit logicals in the Fortran subroutines |
 | `HAVE_FORTRAN_INT8` | Off | Use 64-bit integers in the Fortran subroutines |
 | `IS_STATIC_BUILD` | Off | Build a static executable (no shared libraries) |
 | `NO_BLAS` | Off | Do not search for a BLAS library at all, and do not enable the BLAS variant routine |
@@ -56,23 +65,26 @@ usage:
  options:
 
   -h/--help                            display this information
-  -d/--direct-io                       all files should be opened for direct i/o
+  -v/--verbose                         increase the amount of information displayed
+  -f/--format <format>                 output format for the timing data (default: table)
+
+      <format> = (table|csv|tsv|json|yaml)
+
   -t/--nthreads <integer>              OpenMP code should use this many threads max; zero
                                        implies that the OpenMP runtime default should be used
                                        (which possibly comes from e.g. OMP_NUM_THREADS)
-  -s/--randomseed <integer>            seed the PRNG with this starting value
   -A/--no-align                        do not allocate aligned memory regions
   -B/--align <integer>                 align allocated regions to this byte size
                                        (default: 8)
   -i/--init <init-method>              initialize matrices with this method
                                        (default: noop)
 
-      <init-method> = (noop|simple|random|file=<path>)
+      <init-method> = (noop|zero|simple|simple-omp|random{=###}|file={opt{,..}:}<name>)
 
   -r/--routines <routine-spec>         augment the list of routines to perform
-                                       (default: basic,smart,opt)
+                                       (default: basic,basic-fortran)
 
-      <routine-spec> = {+|-}(all|basic|smart|opt|openmp|openmp_opt|blas){,...}
+      <routine-spec> = {+|-}(all|basic|basic-fortran|smart-fortran|opt-fortran|basic-fortran-omp|opt-fortran-omp|blas|blas-fortran){,...}
 
 
  calculation performed is:
@@ -91,81 +103,105 @@ The simplest test is to just execute `./mmbench` without any flags:
 
 ```
 $ ./mmbench
-INFO:  Using matrix initialization method 'noop'
-INFO:  Using matrix multiplication routines 'basic,smart,opt'
-INFO:  Allocating matrices with alignment of 8 bytes
-                                                                          walltime  |        user cpu  |      system cpu 
-INIT:     Noop matrix initialization:                               9.427000000e-06 |  1.000000000e-06 |  1.000000000e-06
-START:    Baseline n x n matrix multiply:                           8.529748004e+00 |  8.523862000e+00 |  2.259000000e-03
-INIT:     Noop matrix initialization:                               1.232000000e-06 |  0.000000000e+00 |  0.000000000e+00
-START:    Baseline n x n matrix multiply:                           7.823453647e+00 |  7.822634000e+00 |  0.000000000e+00
-INIT:     Noop matrix initialization:                               1.183000000e-06 |  0.000000000e+00 |  0.000000000e+00
-START:    Baseline n x n matrix multiply:                           7.737498924e+00 |  7.734720000e+00 |  9.990000000e-04
-INIT:     Noop matrix initialization:                               1.152000000e-06 |  1.000000000e-06 |  0.000000000e+00
-START:    Baseline n x n matrix multiply:                           7.264827706e+00 |  7.264055000e+00 |  0.000000000e+00
-AVG INIT:                                                           3.248500000e-06 |  5.000000000e-07 |  2.500000000e-07
-AVG MULT:                                                           7.838882070e+00 |  7.836317750e+00 |  8.145000000e-04
+Starting test of methods: noop, basic
 
-INIT:     Noop matrix initialization:                               4.934000000e-06 |  0.000000000e+00 |  3.000000000e-06
-START:    Smart n x n matrix multiply:                              7.542515391e+00 |  7.524331000e+00 |  1.573000000e-02
-INIT:     Noop matrix initialization:                               1.168000000e-06 |  0.000000000e+00 |  0.000000000e+00
-START:    Smart n x n matrix multiply:                              7.523280223e+00 |  7.522312000e+00 |  0.000000000e+00
-INIT:     Noop matrix initialization:                               1.237000000e-06 |  0.000000000e+00 |  0.000000000e+00
-START:    Smart n x n matrix multiply:                              7.340598395e+00 |  7.338839000e+00 |  1.000000000e-03
-INIT:     Noop matrix initialization:                               1.256000000e-06 |  0.000000000e+00 |  0.000000000e+00
-START:    Smart n x n matrix multiply:                              7.380978254e+00 |  7.377189000e+00 |  3.000000000e-03
-AVG INIT:                                                           2.148750000e-06 |  0.000000000e+00 |  7.500000000e-07
-AVG MULT:                                                           7.446843066e+00 |  7.440667750e+00 |  4.932500000e-03
+                   basic       last value         miniumum          maximum          average         variance    std deviation
+------------------------ ---------------- ---------------- ---------------- ---------------- ---------------- ----------------
+                Walltime         0.904813         0.904813          1.11065         0.956533        0.0105566         0.102745
+           User CPU time         0.904708         0.904582          1.11048         0.956268        0.0105703         0.102812
+         System CPU time            3e-06                0         0.000572       0.00014375      8.15123e-08      0.000285504
+        rusage.ru_maxrss            15420            15276            15420            15384             5184               72
+         rusage.ru_nswap                0                0                0                0                0                0
+       rusage.ru_inblock                0                0                0                0                0                0
+      rusage.ru_outblock                0                0                0                0                0                0
 
-INIT:     Noop matrix initialization:                               1.112000000e-06 |  0.000000000e+00 |  0.000000000e+00
-START:    Baseline (optimized) n x n matrix multiply:               8.457228800e-02 |  8.357300000e-02 |  9.900000000e-04
-INIT:     Noop matrix initialization:                               1.570200000e-05 |  1.500000000e-05 |  0.000000000e+00
-START:    Baseline (optimized) n x n matrix multiply:               8.636932100e-02 |  8.635400000e-02 |  0.000000000e+00
-INIT:     Noop matrix initialization:                               1.835000000e-05 |  0.000000000e+00 |  1.800000000e-05
-START:    Baseline (optimized) n x n matrix multiply:               8.644464300e-02 |  8.545900000e-02 |  9.760000000e-04
-INIT:     Noop matrix initialization:                               1.049000000e-06 |  1.000000000e-06 |  0.000000000e+00
-START:    Baseline (optimized) n x n matrix multiply:               9.097923600e-02 |  9.096900000e-02 |  0.000000000e+00
-AVG INIT:                                                           9.053250000e-06 |  4.000000000e-06 |  4.500000000e-06
-AVG MULT:                                                           8.709137200e-02 |  8.658875000e-02 |  4.915000000e-04                                                        9.126028705e-01 |  9.125065000e-01 |  0.000000000e+00
-```
 
-To explicitly only test the BLAS variant (which in this example is linked against the Portland default BLAS):
+Starting test of methods: noop, basic-fortran
+
+           basic-fortran       last value         miniumum          maximum          average         variance    std deviation
+------------------------ ---------------- ---------------- ---------------- ---------------- ---------------- ----------------
+                Walltime          7.08075          7.08075          7.08356           7.0825      1.69123e-06       0.00130047
+           User CPU time          7.07996          7.07945           7.0826          7.08095      2.20455e-06       0.00148477
+         System CPU time                0                0         0.001999         0.000749      9.15335e-07      0.000956732
+        rusage.ru_maxrss            15440            15440            15440            15440                0                0
+         rusage.ru_nswap                0                0                0                0                0                0
+       rusage.ru_inblock                0                0                0                0                0                0
+      rusage.ru_outblock                0                0                0                0                0                0
+
+
+Matrix initialization timing results:
+
+                    noop       last value         miniumum          maximum          average         variance    std deviation
+------------------------ ---------------- ---------------- ---------------- ---------------- ---------------- ----------------
+                Walltime         9.22e-07         8.91e-07        2.917e-06      1.02125e-06      1.67084e-13       4.0876e-07
+           User CPU time                0                0            1e-06      8.33333e-08      7.97101e-14       2.8233e-07
+         System CPU time                0                0            1e-06      8.33333e-08      7.97101e-14       2.8233e-07
+        rusage.ru_maxrss            15440            11432            15440            14911      1.80697e+06          1344.24
+         rusage.ru_nswap                0                0                0                0                0                0
+       rusage.ru_inblock                0                0                0                0                0                0
+      rusage.ru_outblock                0                0                0                0                0                0
 
 ```
-$ ./mmbench --routines==blas
-INFO:  Using matrix initialization method 'noop'
-INFO:  Using matrix multiplication routines 'blas'
-INFO:  Allocating matrices with alignment of 8 bytes
-                                                                          walltime  |        user cpu  |      system cpu 
-INIT:     Noop matrix initialization:                               8.031400000e-05 |  5.000000000e-04 |  8.950000000e-04
-START:    BLAS n x n matrix multiply:                               5.172554300e-02 |  5.447710000e-01 |  1.315743000e+00
-INIT:     Noop matrix initialization:                               6.323800000e-05 |  3.460000000e-04 |  8.180000000e-04
-START:    BLAS n x n matrix multiply:                               3.954175800e-02 |  3.974420000e-01 |  1.024535000e+00
-INIT:     Noop matrix initialization:                               5.596000000e-05 |  2.900000000e-04 |  7.120000000e-04
-START:    BLAS n x n matrix multiply:                               3.639290700e-02 |  3.713540000e-01 |  8.211290000e-01
-INIT:     Noop matrix initialization:                               4.267000000e-06 |  1.000000000e-06 |  2.000000000e-06
-START:    BLAS n x n matrix multiply:                               3.629492400e-02 |  3.606800000e-02 |  2.210000000e-04
-AVG INIT:                                                           5.094475000e-05 |  2.842500000e-04 |  6.067500000e-04
-AVG MULT:                                                           4.098878300e-02 |  3.374087500e-01 |  7.904070000e-01
+
+To explicitly only test the BLAS variant (which in this example is linked against MKL) using random matrices:
+
+```
+$ ./mmbench --init=random --routines==blas
+Starting test of methods: random, blas
+
+                    blas       last value         miniumum          maximum          average         variance    std deviation
+------------------------ ---------------- ---------------- ---------------- ---------------- ---------------- ----------------
+                Walltime       0.00229291       0.00229291         0.455823         0.115742        0.0514023         0.226721
+           User CPU time          0.08172         0.078486         0.161008         0.103014       0.00152216        0.0390149
+         System CPU time                0                0         0.078607        0.0205448       0.00150116        0.0387448
+        rusage.ru_maxrss           168940           168940           168940           168940                0                0
+         rusage.ru_nswap                0                0                0                0                0                0
+       rusage.ru_inblock                0                0           104224            26056      2.71566e+09            52112
+      rusage.ru_outblock                0                0                0                0                0                0
+
+
+Matrix initialization timing results:
+
+                  random       last value         miniumum          maximum          average         variance    std deviation
+------------------------ ---------------- ---------------- ---------------- ---------------- ---------------- ----------------
+                Walltime        0.0214437        0.0155221        0.0352457        0.0226773      2.85907e-05       0.00534703
+           User CPU time         0.744302         0.012482          1.19908         0.636958          0.15895         0.398686
+         System CPU time         0.026802                0         0.068637        0.0292212      0.000408788        0.0202185
+        rusage.ru_maxrss           168940            15336           168940           131511      4.58753e+09          67731.3
+         rusage.ru_nswap                0                0                0                0                0                0
+       rusage.ru_inblock                0                0                0                0                0                0
+      rusage.ru_outblock                0                0                0                0                0                0
+
 ```
 
 Or to exercise a direct i/o file-based matrix initialization (with smaller matrix dimension):
 
 ```
 $ dd if=/dev/urandom of=mat bs=8000 count=1000
-$ ./mmbench --init=file=mat --routines==opt -n100 --direct-io
-INFO:  Using matrix initialization method 'file=mat'
-INFO:  Using matrix multiplication routines 'opt'
-INFO:  Allocating matrices with alignment of 8 bytes
-                                                                          walltime  |        user cpu  |      system cpu 
-INIT:     File-based matrix initialization:                         3.229985637e+00 |  1.245620000e+00 |  3.481999000e+00
-START:    Baseline (optimized) n x n matrix multiply:               7.919956000e-03 |  7.915000000e-03 |  0.000000000e+00
-INIT:     File-based matrix initialization:                         3.202796434e+00 |  2.042400000e-02 |  2.968670000e-01
-START:    Baseline (optimized) n x n matrix multiply:               8.526381000e-03 |  8.521000000e-03 |  0.000000000e+00
-INIT:     File-based matrix initialization:                         3.034241127e+00 |  2.403800000e-02 |  3.069780000e-01
-START:    Baseline (optimized) n x n matrix multiply:               8.381360000e-03 |  8.178000000e-03 |  1.920000000e-04
-INIT:     File-based matrix initialization:                         2.995645767e+00 |  1.868500000e-02 |  3.060000000e-01
-START:    Baseline (optimized) n x n matrix multiply:               8.563715000e-03 |  8.559000000e-03 |  0.000000000e+00
-AVG INIT:                                                           3.115667241e+00 |  3.271917500e-01 |  1.097961000e+00
-AVG MULT:                                                           8.347853000e-03 |  8.293250000e-03 |  4.800000000e-05
+$ ./mmbench --init=file=direct:mat --routines==opt-fortran
+Starting test of methods: file, opt-fortran
+
+             opt-fortran       last value         miniumum          maximum          average         variance    std deviation
+------------------------ ---------------- ---------------- ---------------- ---------------- ---------------- ----------------
+                Walltime        0.0805436        0.0805433        0.0811797        0.0808243      1.08838e-07      0.000329907
+           User CPU time         0.080204         0.080204         0.081175        0.0806755       2.4549e-07      0.000495469
+         System CPU time         0.000335                0         0.000335       0.00014425      2.91856e-08      0.000170838
+        rusage.ru_maxrss            23608            23188            23608            23476            39456          198.635
+         rusage.ru_nswap                0                0                0                0                0                0
+       rusage.ru_inblock                0                0                0                0                0                0
+      rusage.ru_outblock                0                0                0                0                0                0
+
+
+Matrix initialization timing results:
+
+                    file       last value         miniumum          maximum          average         variance    std deviation
+------------------------ ---------------- ---------------- ---------------- ---------------- ---------------- ----------------
+                Walltime         0.189213         0.189129         0.274364         0.196867      0.000595933        0.0244117
+           User CPU time         0.015008         0.011788         0.021381        0.0162526      8.68436e-06       0.00294692
+         System CPU time         0.174196         0.169903         0.252382         0.180556      0.000516752        0.0227322
+        rusage.ru_maxrss            23608            15404            23608          22424.3      6.32978e+06           2515.9
+         rusage.ru_nswap                0                0                0                0                0                0
+       rusage.ru_inblock                0                0            15632          1302.67      2.03633e+07          4512.57
+      rusage.ru_outblock                0                0                0                0                0                0
+
 ```
