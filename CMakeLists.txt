@@ -69,8 +69,9 @@ ENDIF (NOT NO_DIRECTIO)
 #
 # Setup the program to build:
 #
-ADD_EXECUTABLE(mmbench mat_mult_basic.F90 mat_mult_smart.F90 mat_mult_optimized.F90 mat_mult_blas.F90 mat_mult_openmp.F90 mat_mult_openmp_optimized.F90 mmbench.c)
+ADD_EXECUTABLE(mmbench mat_mult_basic.F90 mat_mult_smart.F90 mat_mult_optimized.F90 mat_mult_blas.F90 mat_mult_openmp.F90 mat_mult_openmp_optimized.F90 FortranInterface.c ExecutionTimer.c MatrixInitMethod.c MatrixMultiplyMethod.c mmbench.c)
 SET_TARGET_PROPERTIES(mmbench PROPERTIES LINKER_LANGUAGE C)
+TARGET_COMPILE_OPTIONS(mmbench PUBLIC "-DEXECUTIONTIMER_FORTRAN_INTERFACE")
 TARGET_COMPILE_OPTIONS(mmbench PUBLIC $<$<COMPILE_LANGUAGE:Fortran>:${CMAKE_Fortran90_FLAGS}>)
 SET_SOURCE_FILES_PROPERTIES(mat_mult_basic.F90 mat_mult_smart.F90 mat_mult_blas.F90 mat_mult_openmp.F90 PROPERTIES COMPILE_FLAGS ${CMAKE_Fortran_FLAGS_DEBUG})
 SET_SOURCE_FILES_PROPERTIES(mat_mult_optimized.F90 mat_mult_openmp_optimized.F90 PROPERTIES COMPILE_FLAGS ${CMAKE_Fortran_FLAGS_RELEASE})
@@ -90,6 +91,7 @@ ENDIF (HAVE_DIRECTIO)
 IF (OpenMP_FOUND)
     TARGET_COMPILE_OPTIONS(mmbench PUBLIC "-DHAVE_OPENMP")
     TARGET_COMPILE_OPTIONS(mmbench PUBLIC $<$<COMPILE_LANGUAGE:Fortran>:${OpenMP_Fortran_FLAGS}>)
+    TARGET_COMPILE_OPTIONS(mmbench PUBLIC $<$<COMPILE_LANGUAGE:C>:${OpenMP_C_FLAGS}>)
     TARGET_LINK_LIBRARIES(mmbench ${OpenMP_Fortran_FLAGS} ${OpenMP_Fortran_LIBRARIES})
 ENDIF (OpenMP_FOUND)
 
